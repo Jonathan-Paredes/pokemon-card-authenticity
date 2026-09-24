@@ -1,0 +1,5 @@
+camera,filename,card_id,label,pred,pred_label,prob_fake,y_true,y_pred,is_error
+iphone,C029.jpg,C029,fake,0.0,real,0.36865234375,1,0,True
+iphone,C032.jpg,C032,fake,0.0,real,0.231201171875,1,0,True
+iphone,C033.jpg,C033,fake,0.0,real,0.325439453125,1,0,True
+oneplus,C026.jpg,C026,fake,0.0,real,0.34326171875,1,0,True

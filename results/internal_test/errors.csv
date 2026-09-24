@@ -1,0 +1,13 @@
+dispositivo,filename,card_id,label,pred,pred_label,prob_fake,y_true,y_pred,is_error
+Fotos_oneplus,c005_front_oneplus_flash.jpg,C005,real,1,fake,0.83154296875,0,1,True
+Fotos_iphone,c029_front_iphone.jpg,C029,fake,0,real,0.396484375,1,0,True
+Fotos_iphone,c054_front_iphone_characteristics.jpg,C054,real,1,fake,0.76025390625,0,1,True
+Fotos_iphone,c059_front_iphone_upper_left.jpg,C059,real,1,fake,0.5478515625,0,1,True
+Fotos_oneplus,c068_front_oneplus.jpg,C068,fake,0,real,0.03485107421875,1,0,True
+Fotos_oneplus,c068_front_oneplus_above.jpg,C068,fake,0,real,0.0248870849609375,1,0,True
+Fotos_oneplus,c068_front_oneplus_below.jpg,C068,fake,0,real,0.040191650390625,1,0,True
+Fotos_oneplus,c068_front_oneplus_characteristics.jpg,C068,fake,0,real,0.03570556640625,1,0,True
+Fotos_oneplus,c068_front_oneplus_flash.jpg,C068,fake,0,real,0.0496826171875,1,0,True
+Fotos_oneplus,c068_front_oneplus_lower_left.jpg,C068,fake,0,real,0.0291748046875,1,0,True
+Fotos_oneplus,c068_front_oneplus_upper_left.jpg,C068,fake,0,real,0.057586669921875,1,0,True
+Fotos_oneplus,c068_front_oneplus_watermark.jpg,C068,fake,0,real,0.066162109375,1,0,True

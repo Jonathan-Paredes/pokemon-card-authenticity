@@ -1,0 +1,18 @@
+Training report - 2026-09-17T13:22:10.615154
+============================================================
+
+TEST METRICS
+  acc: 0.9785
+  f1: 0.9783
+  auc: 0.9811
+  acc_iphone: 0.9883
+  f1_iphone: 0.9883
+  auc_iphone: 0.9998
+  acc_oneplus: 0.9702
+  f1_oneplus: 0.9695
+  auc_oneplus: 0.9650
+  gap_f1: 0.0188
+
+CROSS-DOMAIN RESULTS
+  iPhone -> OnePlus: F1 drop = 0.1192
+  OnePlus -> iPhone: F1 drop = 0.0696

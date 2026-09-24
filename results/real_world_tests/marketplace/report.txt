@@ -1,0 +1,17 @@
+Marketplace (20 images, all real)
+2026-09-23T21:51:08.506056
+==================================================
+
+N: 20
+Acc: 0.1500
+F1: 0.0000
+AUC: nan
+
+              precision    recall  f1-score   support
+
+        real     1.0000    0.1500    0.2609        20
+        fake     0.0000    1.0000    0.0000         0
+
+    accuracy                         0.1500        20
+   macro avg     0.5000    0.5750    0.1304        20
+weighted avg     1.0000    0.1500    0.2609        20

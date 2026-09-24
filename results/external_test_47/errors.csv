@@ -1,0 +1,3 @@
+filename,label,pred,pred_label,prob_fake,y_true,y_pred,is_error
+C013.jpg,real,1.0,fake,0.94384765625,0,1,True
+C037.jpg,real,1.0,fake,0.80029296875,0,1,True

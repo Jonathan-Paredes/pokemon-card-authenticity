@@ -1,932 +1,556 @@
 # 🃏 Pokémon Card Authenticity Detection
 
-## Computer Vision for Counterfeit Pokémon Card Detection using ResNet18
+> Detecting counterfeit Pokémon cards from photographs using deep learning — with an emphasis on **leakage prevention, external validation, and honest failure analysis**.
 
-A computer vision project that investigates whether a deep learning model can distinguish **authentic Pokémon cards from counterfeit cards** using photographs of physical cards.
-
-The project focuses not only on achieving high classification accuracy, but also on evaluating **generalization, data leakage, model interpretability, and real-world limitations**.
+[![Python](https://img.shields.io/badge/Python-3.10-blue.svg)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.5.1-red.svg)](https://pytorch.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Internal F1](https://img.shields.io/badge/Internal%20F1-0.978-blue)]()
+[![Blind F1](https://img.shields.io/badge/Blind%20Test%20F1-0.984-brightgreen)]()
+[![External Recall](https://img.shields.io/badge/External%20Recall-95.7%25-success)]()
+[![Domain Shift](https://img.shields.io/badge/Real--world%20Performance-Collapses-orange)]()
 
 ---
 
-## 📌 Project Overview
+## 📌 TL;DR
 
-Counterfeit trading cards can contain subtle visual differences from authentic cards. These differences may appear in:
+A computer vision system that classifies Pokémon cards as **authentic** or **counterfeit** from photographs.
 
-- Printing quality
+**What works:**
+
+| Test | N | Result |
+|---|---:|---:|
+| Internal held-out test | 558 | F1 = **0.978** |
+| Blind test (unseen cards, same protocol) | 262 | F1 = **0.984**, 4 errors |
+| External test (new expansion, same protocol) | 47 | Recall = **95.7%** |
+| Cross-domain gap (iPhone ↔ OnePlus) | — | 0.019 |
+
+**What doesn't work — and why it matters:**
+
+| Test | N | Result |
+|---|---:|---:|
+| Webcam images | 29 | ~0.55 (chance level) |
+| Marketplace listing photos | 20 | Real recall = **0.15** |
+
+The model **generalizes to new cards** but **fails under new acquisition conditions** (different camera, lighting, background, compression). This is the central finding of the project.
+
+---
+
+## 🎯 Project Overview
+
+Counterfeit trading cards can look extremely similar to authentic ones. Detection requires recognizing subtle visual cues in:
+
+- Printing quality and typography
 - Color and tonal characteristics
-- Borders and typography
-- Card texture
+- Borders and cardstock texture
 - Holographic patterns
 - Illustration details
-- Text and symbols
 - Small visual inconsistencies
 
-This project explores whether a convolutional neural network can learn these differences from photographs.
+This project investigates whether a CNN can learn these differences **from photographs of physical cards** — and, more importantly, whether the resulting model **generalizes to real-world conditions**.
 
-The main question is:
+### The core question
 
-> **Can a deep learning model learn to distinguish authentic Pokémon cards from counterfeit cards, and does that knowledge generalize to cards that were not present during training?**
+> **Can a deep learning model distinguish authentic Pokémon cards from counterfeit cards, and does that knowledge generalize to cards and conditions that were not present during training?**
 
-Rather than treating the problem as a simple image classification exercise, the project evaluates the complete machine learning pipeline, from dataset construction to independent external validation and model interpretability.
-
----
-
-# 🎯 Objectives
-
-### Primary objective
-
-Build a binary image classification model capable of distinguishing:
-
-- `REAL` — authentic Pokémon card
-- `FAKE` — counterfeit Pokémon card
-
-### Secondary objectives
-
-The project also aims to:
-
-1. Build a dataset using physical Pokémon cards.
-2. Prevent data leakage between training, validation and test sets.
-3. Train a CNN using transfer learning.
-4. Evaluate performance on a held-out internal test set.
-5. Evaluate generalization using an independently collected external dataset.
-6. Investigate model behavior using Grad-CAM.
-7. Identify possible dataset biases and shortcut learning.
-8. Analyze model failures rather than focusing exclusively on accuracy.
-9. Document the limitations of using computer vision for physical card authentication.
+The answer is: **yes on new cards, no on new cameras.** This distinction is the main contribution.
 
 ---
 
-# 🧠 Methodology
+## 🔬 What Makes This Project Different
 
-The project follows this pipeline:
+Most card authentication projects report a single accuracy number. This project focuses on the **full pipeline**:
 
-```text
+1. **Detects and corrects data leakage** — image-level splits are broken; card-level splits are mandatory.
+2. **Corrects EXIF orientation** — an almost never discussed problem that silently destroys performance.
+3. **Evaluates external generalization** — internal accuracy means nothing if the model only works on the training protocol.
+4. **Analyzes failure modes** — Grad-CAM reveals what the model actually looks at.
+5. **Reports domain shift honestly** — the model collapses under real-world conditions, and we prove it.
+
+---
+
+## 🏗️ Architecture & Pipeline
+
 Physical Pokémon Cards
-        │
-        ▼
-Photograph Acquisition
-        │
-        ▼
-Dataset Organization
-        │
-        ▼
+│
+▼
+Photograph Acquisition (iPhone + OnePlus)
+│
+▼
+Dataset Organization (real/fake × 7–10 views)
+│
+▼
 Data Quality & Leakage Analysis
-        │
-        ▼
+│
+▼
+EXIF Orientation Correction
+│
+▼
 Card-Level Train / Validation / Test Split
-        │
-        ▼
-Image Preprocessing & Augmentation
-        │
-        ▼
-ResNet18 + Transfer Learning
-        │
-        ▼
-Model Training
-        │
-        ▼
+│
+▼
+Anti-Leakage Verification (5 checks)
+│
+▼
+Preprocessing + Augmentation
+│
+▼
+EfficientNet-B0 + Transfer Learning
+│
+▼
 Internal Test Evaluation
-        │
-        ▼
-Independent External Dataset
-        │
-        ▼
-Error Analysis
-        │
-        ▼
+│
+▼
+Blind Test (262 unseen cards)
+│
+▼
+External Test (new expansion)
+│
+▼
+Real-World Test (webcam + marketplace)
+│
+▼
 Grad-CAM Interpretability
-```
+│
+▼
+Domain Shift Analysis
 
 ---
 
-# 📊 Dataset
+## 📊 Dataset
 
-The initial dataset was constructed from **physical Pokémon cards**.
+### Composition
 
-Each physical card can have multiple photographs. Therefore, the unit used for dataset splitting is the **physical card**, rather than the individual image.
+| Metric | Value |
+|---|---:|
+| Physical cards | 76 |
+| Real/Fake pairs | 38 |
+| Total images | 2,570 |
+| Cameras | 2 (iPhone, OnePlus) |
+| Views per card | 7–10 |
+| Languages | EN, ES |
 
-## Initial Dataset
+### Class balance
 
-| Class | Physical Cards | Images |
+| Class | Images | Physical cards |
 |---|---:|---:|
-| REAL | 55 | 542 |
-| FAKE | 55 | 542 |
-| **Total** | **110** | **1084** |
+| real | 1,282 | 38 |
+| fake | 1,288 | 38 |
+| **Total** | **2,570** | **76** |
 
-The dataset contains an equal number of authentic and counterfeit cards.
+The dataset is class-balanced at the **physical card level**, not the image level. This prevents the model from learning a trivial majority-class prior.
+
+### Views captured
+
+Each card was photographed from multiple angles and regions to cover different authenticity-relevant features:
+
+| View | Description |
+|---|---|
+| `FRONT` | Full frontal view |
+| `FRONT_ABOVE` / `FRONT_BELOW` | Small angle variations |
+| `FLASH` | Captured with flash |
+| `LOWER_LEFT` / `UPPER_LEFT` | Corner crops |
+| `WATERMARK` | Watermark region close-up |
+| `CHARACTERISTICS` | Card-specific feature |
+| `ANGLE15` / `ANGLE45` / `ANGLE75` | OnePlus only |
+
+### Known acquisition biases
+
+- **Two cameras only**: iPhone + OnePlus. No webcams, DSLRs, or other smartphones.
+- **Controlled capture conditions**: consistent backgrounds and lighting during acquisition.
+- **Protocol consistency**: all cards followed the same photographic protocol.
+
+These choices enabled clean training but introduce **domain bias** — analyzed in detail below.
 
 ---
 
-# 🔐 Preventing Data Leakage
+## 🔐 Preventing Data Leakage
 
-One of the most important decisions in the project was avoiding image-level random splitting.
+### The problem
 
-Because multiple photographs can belong to the same physical card, randomly distributing images could result in the same card appearing in both training and test sets.
+Multiple photographs can belong to the same physical card. Splitting by image leaks information:
 
-For example:
-
-```text
 C032_REAL_01.jpg → TRAIN
 C032_REAL_02.jpg → TRAIN
-C032_REAL_03.jpg → TEST
-```
+C032_REAL_03.jpg → TEST ❌ Same physical card!
 
-In this situation, the model could potentially learn the identity or unique visual characteristics of card `C032` instead of learning characteristics related to authenticity.
 
-To avoid this problem, the dataset was split using the **physical card identity / card pair**.
+The model can memorize card-specific features and appear to generalize.
 
-### Dataset split
+### The solution
 
-| Split | Card Pairs | Images |
+Split **by `card_id`** so that every physical card appears in exactly one split.
+
+| Split | Cards | Images |
 |---|---:|---:|
-| TRAIN | 38 | 746 |
-| VALIDATION | 8 | 158 |
-| TEST | 9 | 180 |
-| **Total** | **55** | **1084** |
+| Train | 48 | 1,554 |
+| Validation | 12 | 372 |
+| Test | 16 | 644 |
+| **Total** | **76** | **2,570** |
 
-The split was performed at the card level to ensure that photographs of the same physical card did not cross dataset boundaries.
+### Verification (5 independent checks)
 
-> **This is an important distinction because the goal is to evaluate generalization to unseen physical cards, not recognition of previously observed cards.**
+| Check | Result |
+|---|---|
+| `card_id` in >1 split | **0** |
+| `filename` in >1 split | **0** |
+| `physical_id` in >1 split | **0** |
+| Identical `md5` across splits | **0** |
+| Near-duplicates (32×32 perceptual hash) across splits | **0** |
+
+All checks pass. The split is leakage-free.
 
 ---
 
-# 🤖 Model
+## 🖼️ EXIF Orientation Correction
 
-The project uses **ResNet18**, a convolutional neural network architecture, through transfer learning.
+### The problem
 
-The original classification layer was replaced with a binary classifier:
+Smartphone cameras store images in **landscape pixel orientation** and add an **EXIF Orientation tag** (6 or 8) telling viewers to rotate on display.
 
-```text
-ResNet18
-   │
-   ├── Convolutional layers
-   ├── Residual blocks
-   ├── Feature extraction
-   │
-   ▼
-Fully Connected Layer
-   │
-   ├── REAL
-   └── FAKE
-```
+- **iPhone**: pixel data is landscape, `Orientation = 6`
+- **OnePlus**: pixel data is already rotated, `Orientation = 1`
 
-### Model configuration
+Loading with `cv2.imread()` (which ignores EXIF) makes iPhone images appear rotated 90°. If the model sees inconsistent orientations, it learns spurious features that don't transfer.
+
+### The solution
+
+Every image was passed through `PIL.ImageOps.exif_transpose()` once, saving corrected versions to `Dataset_imagenes_fixed/`.
+
+| Stage | iPhone | OnePlus |
+|---|---|---|
+| Before | 589 landscape (EXIF=6) | 699 portrait (EXIF=1) |
+| After | 589 portrait (EXIF=1) | 699 portrait (EXIF=1) |
+
+Without this fix, ~50% of the dataset would arrive sideways to the model, and performance would collapse with no obvious explanation.
+
+**This is one of the most under-documented failure modes in image classification projects.**
+
+---
+
+## 🤖 Model
+
+**EfficientNet-B0**, ImageNet-pretrained, fine-tuned end-to-end.
 
 | Parameter | Value |
 |---|---|
-| Architecture | ResNet18 |
-| Framework | PyTorch |
-| Number of classes | 2 |
-| Total parameters | 11,177,538 |
+| Architecture | EfficientNet-B0 |
+| Pretrained | ImageNet-1k |
+| Parameters | ~5.3M |
+| Input size | 224 × 224 × 3 |
+| Classes | 2 (real, fake) |
+| Modified layer | `classifier[1]`: Linear(1280 → 2) |
+
+### Training configuration
+
+| Parameter | Value |
+|---|---|
 | Optimizer | AdamW |
-| Learning rate | 0.0001 |
-| Weight decay | 0.0001 |
-| Loss function | CrossEntropyLoss |
-| Scheduler | ReduceLROnPlateau |
-| Maximum epochs | 15 |
+| Learning rate | 1e-4 |
+| Weight decay | 1e-4 |
+| Scheduler | CosineAnnealingLR (T_max=30) |
+| Loss | CrossEntropyLoss, label_smoothing=0.1 |
+| Batch size | 64 |
+| Max epochs | 30 |
+| Early stopping | patience=7 |
+| Mixed precision | Yes |
+| Seed | 42 |
+| Training time | ~15 min (RTX 3060) |
 
-The final fully connected layer was adapted for the two-class classification problem.
+### Selection criterion
 
----
+The best checkpoint was chosen by **cross-camera F1**:
 
-# 🏋️ Training
+score = (F1_iphone + F1_oneplus) / 2
 
-During training, the model showed rapid improvement.
 
-The first epoch achieved:
+This penalizes models that excel on one camera but fail on the other.
 
-```text
-Training Accuracy: 67.02%
-Validation Accuracy: 91.77%
-```
+### Augmentation
 
-By epoch 3:
+Applied online during training with Albumentations:
 
-```text
-Validation Accuracy: 98.10%
-```
+| Transform | Rationale |
+|---|---|
+| `RandomResizedCrop(0.7–1.0)` | Different framings |
+| `HorizontalFlip` | Cards are symmetric |
+| `Rotate(±12°)` | Small rotation tolerance |
+| `ColorJitter(0.35, 0.35, 0.35, 0.08)` | Camera color variation |
+| `RandomGamma(75–125)` | Exposure variation |
+| `GaussNoise(5–30)` | Sensor noise |
+| `MotionBlur(3)` | Hand-shake |
+| `ISONoise` | Low-light artifacts |
 
-The best checkpoint was obtained at:
-
-```text
-Epoch: 13
-Validation Loss: 0.0074
-Validation Accuracy: 100.00%
-```
-
-The best model was saved as:
-
-```text
-pokemon_fake_detector_v1_best.pth
-```
+**Not used**: `VerticalFlip`, `RandomRotate90`, `Transpose`. Watermarks, text, and card layout have canonical orientation.
 
 ---
 
-# 📈 Internal Test Results
+## 📈 Results
 
-The final model was evaluated on the held-out internal test set.
+### 1. Internal test (558 images)
+
+| Metric | Value |
+|---|---:|
+| Accuracy | 0.9785 |
+| F1 | 0.9783 |
+| AUC | 0.9811 |
+| F1 iPhone | 0.9883 |
+| F1 OnePlus | 0.9695 |
+| Gap (iPhone vs OnePlus) | 0.0188 |
+
+### 2. Blind test (262 unseen cards, same protocol)
+
+| Metric | Value |
+|---|---:|
+| Accuracy | 0.9847 |
+| F1 | 0.9841 |
+| AUC | 0.9998 |
+| Errors | **4 / 262 (1.5%)** |
+
+**All 4 errors are Trainer cards**, not Pokémon:
+
+| File | Card | Type | Confidence |
+|---|---|---|---|
+| C032 | Sacred Ash | Item / Trainer | 0.77 |
+| C033 | Ethan's Adventure | Supporter / Trainer | 0.68 |
+| C026 | Team Rocket's Venture Bomb | Item / Trainer | 0.66 |
+| C029 | Team Rocket's Petrel | Supporter / Trainer | 0.63 |
+
+Trainer cards have plain backgrounds and text-dominant layouts — less visual signal to discriminate.
+
+**Cross-camera consistency** (each card was captured twice):
+
+| Category | Count |
+|---|---:|
+| Both cameras correct | 127 |
+| Only OnePlus correct | 3 |
+| Only iPhone correct | 1 |
+| Both cameras wrong | **0** |
+
+Zero cases of "both wrong" — the model's errors are borderline, not systematic per card.
+
+### 3. External test (47 images, new expansion)
+
+All 47 cards are authentic, from an expansion the model has never seen. Captured with flash, varied angles, and partial framing.
+
+| Metric | Value |
+|---|---:|
+| Recall (real) | **0.9574** (45/47) |
+| False positives | 2 |
+| Mean confidence | 0.904 |
+| Median confidence | 0.927 |
+
+**The 2 false positives**:
+
+| File | Card | Type | P(fake) |
+|---|---|---|---|
+| C037 | Sacred Charm | Trainer | 0.80 |
+| C044 | Mega Gengar EX | Pokémon (holo) | 0.44 |
+
+C037 is again a Trainer card. C044 is a holographic EX Pokémon, where the model's confidence was near the decision boundary.
+
+### 4. Cross-domain (iPhone ↔ OnePlus)
+
+| Experiment | Source F1 | Target F1 | Drop F1 |
+|---|---:|---:|---:|
+| iPhone → OnePlus | 0.9730 | 0.8538 | **0.1192** |
+| OnePlus → iPhone | 0.9126 | 0.8430 | **0.0696** |
+
+Training with a single camera loses ~7–12 F1 points when tested on the other. Training with both cameras closes the gap to 0.019 (see internal test).
+
+### 5. Holographic cards (never seen in training)
+
+The model was never trained on holographic cards (7 pairs were excluded — insufficient sample size). Still:
+
+| Category | Correct | Total | Accuracy |
+|---|---:|---:|---:|
+| Real + holo reverse | 30 | 30 | **100%** |
+| Real + holographic | 6 | 6 | **100%** |
+| Real + no holo | 98 | 98 | **100%** |
+
+**The model does not use the hologram as a shortcut.**
+
+### 6. Language
+
+| Language | N | Accuracy |
+|---|---:|---:|
+| English | 254 | 0.984 |
+| Spanish | 8 | 1.000 |
+
+**The model does not rely on language-specific text.**
+
+---
+
+## 🔴 Critical Finding: Domain Shift in Real-World Conditions
+
+All results above share the **same acquisition protocol** as training: iPhone + OnePlus, controlled framing.
+
+### The real-world test
+
+Two additional datasets were collected under realistic conditions:
+
+| Test | N | Description |
+|---|---:|---|
+| **Webcam** | 29 | Captured with a laptop webcam (18 fake + 11 real) |
+| **Marketplace** | 20 | Photos pulled from online seller listings (all real) |
 
 ### Results
 
-| Metric | Score |
-|---|---:|
-| Accuracy | **99.44%** |
-| Precision | **100.00%** |
-| Recall | **98.89%** |
-| F1 Score | **99.44%** |
+| Test | N | Real recall | Fake recall | Overall |
+|---|---:|---:|---:|---:|
+| Blind (control) | 262 | 0.988 | 0.977 | 0.984 |
+| External | 47 | 0.957 | — | — |
+| **Webcam** | 29 | 0.545 | 0.556 | **0.552** |
+| **Marketplace** | 20 | **0.150** | — | — |
 
-These results indicate excellent performance on the internal test set.
+### What this means
 
-However, this result should **not** be interpreted as proof that the model can reliably authenticate arbitrary Pokémon cards in the real world.
+1. **Webcam**: performance collapses to chance level. The model has no frame of reference for webcam-style compression, sensor noise, and white balance.
+2. **Marketplace**: severe **directional bias**. **17 of 20 authentic cards are classified as fake**. The model learned that "iPhone/OnePlus-like captures" = evidence of authenticity, and everything else falls into the "fake" region.
 
-The internal test set consists of cards originating from the same overall data collection process.
+**In production, this model would reject 85% of legitimate authentic cards from real users.**
 
-Therefore, an additional independent evaluation was performed.
+### Why V2 (previous model) appeared to do better
 
----
+The V2 model predicted "real" almost unconditionally. On test sets dominated by real cards, this gives high accuracy without any discriminative power.
 
-# 🌎 External Dataset
+| Model | Behavior | Marketplace accuracy |
+|---|---|---:|
+| V2 | Always predicts "real" | 20/20 = 1.00 |
+| **V3** | Genuinely discriminates | 3/20 = 0.15 |
 
-To investigate whether the model generalizes beyond the original dataset, an independently collected external dataset was created **after the initial model had been trained**.
+**V3 is not worse than V2.** V2's "success" is a degenerate strategy: a classifier that always outputs the majority class has high accuracy but zero utility.
 
-This dataset contains cards that were not part of the training process.
+V3's failure is **informative**: it reveals exactly where the learned representation breaks down.
 
-### External dataset
+### Why the domain shift is directional
 
-| Characteristic | Value |
-|---|---:|
-| Physical cards | 40 |
-| REAL cards | 20 |
-| FAKE cards | 20 |
-| Photographs | 80 |
-| Photographs per card | 2 |
-| English cards | 36 |
-| Spanish cards | 4 |
-| iPhone photographs | 40 |
-| OnePlus photographs | 40 |
+The model treats out-of-distribution **appearance** as evidence of counterfeiting. It has no positive examples of "real" outside the training distribution, so unfamiliar-looking images fall into the "fake" cluster.
 
-The external dataset was specifically designed to introduce additional variation.
+**This is not a failure of the architecture.** It is a fundamental limitation of the dataset: two cameras and one capture protocol are insufficient to learn device-invariant authenticity features.
 
-It includes:
-
-- Previously unseen physical cards
-- Different acquisition conditions
-- Multiple cameras
-- Different card languages
-- Additional visual characteristics
+**No amount of architectural sophistication fixes this.** The solution is **more data diversity**, not a better model.
 
 ---
 
-# 🔬 External Evaluation
+## 👁️ Model Interpretability (Grad-CAM)
 
-The external dataset is treated as a separate evaluation domain rather than being incorporated into training.
+Grad-CAM reveals what the model actually looks at.
 
-This allows the following question to be investigated:
+### Key observations
 
-> **Does the model generalize from the original dataset to previously unseen cards?**
+1. **Text regions dominate attention**: card name, attack names, rules text. The model uses **typography, spacing, and print quality** as authenticity signals.
+2. **Trainer cards are harder**: all 4 blind-test errors are Trainer cards. Grad-CAM shows attention concentrated on the name and rules text, while the artwork receives little attention.
+3. **The model does NOT use the hologram as a shortcut**: 100% accuracy on holographic cards never seen in training.
+4. **No language shortcut**: 8/8 Spanish cards correct, with attention on typography, not on linguistic content.
+5. **Diffuse attention on domain-shifted errors**: heatmaps spread across the image without clear focus, indicating "guessing" based on low-level unfamiliar features.
 
-These errors are particularly valuable because they provide information that a single accuracy score cannot.
+### Why this matters
 
-The external evaluation is therefore used for **error analysis and robustness assessment**, rather than simply reporting another performance number.
+Grad-CAM revealed patterns that accuracy alone could not:
 
-> ⚠️ The external evaluation should be interpreted separately from the internal test results. High performance on the original test set does not guarantee equivalent performance on unseen cards.
-
----
-
-# 🧪 External Evaluation
-
-The external dataset provides a more demanding evaluation of model generalization.
-
-Overall performance
-Metric	Result
-Images evaluated	80
-Correct predictions	72
-Incorrect predictions	8
-Accuracy	90.00%
-Macro Precision	90.92%
-Macro Recall	90.00%
-Macro F1	89.94%
-
-The difference between the internal and external evaluations is significant:
-
-Internal Test
-     │
-     ▼
-99.44% Accuracy
-     │
-     │
-     ▼
-External Dataset
-     │
-     ▼
-90.00% Accuracy
-
-This drop in performance suggests that the model does not generalize perfectly to previously unseen cards and acquisition conditions.
-
-This is an important finding of the project.
+| Observation | Insight |
+|---|---|
+| Text regions dominate attention | Model relies on typography, which may not transfer across print qualities |
+| Trainer cards are harder | Future work should add more Trainer card training data |
+| Holograms don't break the model | Model isn't learning trivial material shortcuts |
+| Domain-shifted predictions have diffuse attention | Confidence ≠ reliability under shift |
 
 ---
 
-# 🔍 External Confusion Matrix
+## 🧪 Why External Validation Matters
 
-The external dataset contained 40 authentic and 40 counterfeit images.
+**A high test score is not evidence of real-world generalization.**
+Training performance
+↓
+Internal validation
+↓
+Held-out test set
+↓
+Blind test (unseen cards, same protocol) → still high
+↓
+External test (new expansion, same protocol) → still high
+↓
+Real-world test (new camera, new conditions) → COLLAPSE
 
-Actual \ Predicted	REAL	FAKE
-REAL	39	1
-FAKE	7	33
 
-Therefore:
-
-39/40 authentic images were correctly classified.
-33/40 counterfeit images were correctly classified.
-7 counterfeit images were incorrectly classified as authentic.
-1 authentic image was incorrectly classified as counterfeit.
-
-The main weakness of the model in the external dataset is therefore false negatives: counterfeit cards classified as REAL.
-
----
-
-# 🎯 Performance by Class
-Class	Correct	Total	Recall
-REAL	39	40	97.50%
-FAKE	33	40	82.50%
-
-The model performs substantially better at identifying authentic cards than counterfeit cards in the external dataset.
-
-This asymmetry is important because, for a counterfeit detection system, false negatives are particularly relevant.
-
-A false negative occurs when:
-
-Actual card: FAKE
-        ↓
-Model prediction: REAL
-
-This type of error would be more concerning in a real authentication scenario than a false positive.
+The project treats evaluation as a **progression of difficulty**. Only the last stage reveals what the model actually learned.
 
 ---
 
-# 📷 Performance by Camera
+## 🛠️ Technology Stack
 
-Each external card was photographed using both an iPhone and a OnePlus device.
-
-Interestingly, both cameras produced exactly the same overall image-level accuracy:
-
-Camera	Correct	Total	Accuracy
-iPhone	36	40	90.00%
-OnePlus	36	40	90.00%
-
-This result does not provide evidence of a camera-specific performance difference in this particular experiment.
-
-However, the sample size is still too small to conclude that the model is completely invariant to camera characteristics.
-
----
-
-# 🃏 Performance by Physical Card
-
-Because each physical card was photographed twice, it is also possible to evaluate performance at the card level.
-
-Out of the 40 external physical cards:
-
-35 cards
-│
-├── Both photographs correctly classified
-│
-└── 87.5% of physical cards
-
-Five physical cards had at least one incorrect prediction.
-
-These included:
-
-T005
-T006
-T009
-T010
-T035
-
-This provides another perspective that is not visible from image-level accuracy alone.
+| Component | Version |
+|---|---|
+| Python | 3.10.14 |
+| PyTorch | 2.5.1 |
+| Torchvision | 0.20.1 |
+| Albumentations | 1.4.22 |
+| OpenCV | 4.10.0 |
+| scikit-learn | 1.7.2 |
+| Pillow | 9.4.0 |
+| Pandas | 2.3.3 |
+| CUDA | 12.x |
+| GPU | NVIDIA RTX 3060 (12 GB) |
+| Jupyter Notebook | — |
 
 ---
 
-# ❌ Error Analysis
-
-The eight incorrect image-level predictions were:
-
-Card	Camera	Actual	Prediction	Confidence
-T005	iPhone	FAKE	REAL	88.56%
-T005	OnePlus	FAKE	REAL	89.98%
-T006	iPhone	FAKE	REAL	65.70%
-T006	OnePlus	FAKE	REAL	83.19%
-T009	OnePlus	FAKE	REAL	53.05%
-T010	iPhone	FAKE	REAL	99.38%
-T010	OnePlus	FAKE	REAL	98.98%
-T035	iPhone	REAL	FAKE	53.44%
-
-A particularly interesting case is T010.
-
-The model classified the counterfeit card as authentic with approximately:
-
-iPhone  → REAL 99.38%
-OnePlus → REAL 98.98%
-
-This indicates that the error is not simply caused by uncertainty in the image.
-
-The model was highly confident in an incorrect prediction.
-
-This is an important example of why:
-
-Model confidence should not be interpreted as authentication certainty.
-
----
-
-# 👁️ Model Interpretability with Grad-CAM
-
-To investigate what the model is looking at, Grad-CAM was used.
-
-Grad-CAM produces a visual representation of the regions that contribute most strongly to a prediction.
-
-Conceptually:
-
-Input Image
-     │
-     ▼
-  ResNet18
-     │
-     ▼
-Prediction
-     │
-     ▼
-  Grad-CAM
-     │
-     ▼
-Important Image Regions
-
-This makes it possible to investigate whether the model is focusing on visually meaningful characteristics.
-
----
-
-# 🔬 Example: T005
-
-T005 is a counterfeit card that was incorrectly classified as authentic by both cameras.
-
-iPhone
-Actual: FAKE
-Prediction: REAL
-Confidence: 88.56%
-OnePlus
-Actual: FAKE
-Prediction: REAL
-Confidence: 89.98%
-
-The Grad-CAM visualizations show that the model's attention extends strongly toward the lower region of the card.
-
-This is interesting because the model does not appear to be explicitly identifying a single obvious counterfeit characteristic.
-
-Instead, the prediction may be influenced by broader visual patterns.
-
-T005 observation
-              Original Card
-                    │
-                    ▼
-              ResNet18
-                    │
-                    ▼
-             Prediction
-                    │
-             ┌──────┴──────┐
-             │             │
-          iPhone         OnePlus
-             │             │
-          REAL 88.6%    REAL 90.0%
-             │             │
-             └──────┬──────┘
-                    ▼
-                 Grad-CAM
-                    │
-                    ▼
-        Strong activation in lower
-              card region
-
-This example illustrates why model interpretability is useful: the model can be confidently wrong, and the attention map provides additional information for investigating the reason.
-
----
-
-# ⚠️ Potential Biases and Shortcut Learning
-
-A major concern in this project is shortcut learning.
-
-A neural network does not inherently understand what makes a Pokémon card authentic.
-
-It learns statistical patterns that help minimize the training loss.
-
-Therefore, the model could potentially learn characteristics that correlate with authenticity but are not actually reliable indicators of counterfeiting.
-
-Potential sources of bias include:
-
-Watermarks
-
-The Pokémon watermark or other recurring visual elements could become shortcuts for classification.
-
-Card identity
-
-Specific cards may contain unique artwork, typography, colors or layouts.
-
-The card-level split reduces this risk but does not completely eliminate the possibility of card-specific visual correlations.
-
-Camera characteristics
-
-Different cameras can introduce:
-
-Color differences
-Sharpness differences
-Exposure differences
-Noise patterns
-White balance differences
-
-The external experiment produced equal overall accuracy between the two cameras, but this sample is not large enough to eliminate camera-related bias.
-
-Lighting
-
-Holographic and reflective surfaces can behave very differently depending on illumination and camera angle.
-
-Language
-
-The external dataset includes both English and Spanish cards.
-
-Language-related visual differences may influence predictions even though language itself is not a criterion for authenticity.
-
----
-
-# ✨ Holographic Cards
-
-Holographic cards represent a particularly interesting challenge.
-
-Authentic and counterfeit holographic cards can behave differently under light, but photographic conditions can strongly influence their appearance.
-
-The project includes holographic examples with different visual characteristics, including:
-
-Silver holographic effects
-Purple holographic effects
-Yellow holographic effects
-Other reflective patterns
-
-However, the number and diversity of counterfeit holographic examples remains limited.
-
-Therefore:
-
-Performance on holographic cards should not be generalized to the entire population of counterfeit holographic Pokémon cards.
-
-Additional holographic samples are planned for future dataset expansion.
-
----
-
-# 📊 Grad-CAM Concentration Analysis
-
-In addition to visual inspection of Grad-CAM maps, a concentration metric based on the activation distribution was calculated.
-
-The resulting analysis suggests that incorrect predictions do not necessarily correspond to a simple "low attention" pattern.
-
-For example, some incorrect predictions show concentrated activation in specific regions, while others distribute attention more broadly.
-
-This supports an important observation:
-
-The model can produce a highly confident prediction even when its visual attention does not necessarily correspond to an obvious human-interpretable authentication feature.
-
-Grad-CAM is therefore treated as an interpretability tool rather than as definitive evidence of what the model "understands."
-
----
-
-# 🔎 Error Analysis
-
-One of the main goals of the project is understanding **why the model fails**.
-
-Incorrect predictions from the external dataset are analyzed individually.
-
-For example, some cards produced predictions that were difficult to explain from the perspective of human visual inspection.
-
-The analysis investigates whether errors could be related to:
-
-- Card artwork
-- Background characteristics
-- Lighting
-- Camera differences
-- Language
-- Holographic effects
-- Printing characteristics
-- Card layout
-- Image composition
-- Specific card identities
-
-The objective is to distinguish between:
-
-```text
-Useful visual features
-        vs.
-Dataset-specific shortcuts
-```
-
----
-
-# 🧪 Why External Validation Matters
-
-The project demonstrates an important principle in machine learning:
-
-> **A high test score is not necessarily evidence of real-world generalization.**
-
-The internal test set produced:
-
-```text
-99.44% Accuracy
-```
-
-which is excellent.
-
-However, the external dataset introduced a new challenge:
-
-```text
-Unseen physical cards
-        +
-Different photographs
-        +
-Different cameras
-        +
-Different languages
-        +
-Different card characteristics
-```
-
-This makes the external evaluation a more realistic test of robustness.
-
-The project therefore treats model evaluation as a progression:
-
-```text
-Training Performance
-        ↓
-Internal Validation
-        ↓
-Held-out Test Set
-        ↓
-Independent External Dataset
-        ↓
-Error Analysis
-        ↓
-Interpretability
-```
-
----
-
-# 🛠️ Technology Stack
-
-The project was developed using:
-
-- Python 3.10.14
-- PyTorch 2.5.1
-- Torchvision 0.20.1
-- Pillow 9.4.0
-- Pandas 2.3.3
-- Scikit-learn 1.7.2
-- Jupyter Notebook
-- CUDA
-- NVIDIA RTX 3060 12GB
-
----
-
-# 📁 Project Structure
-
-The repository is organized around reproducibility and separation of responsibilities. The initial public version focuses on the documented experiment and the clean training notebook; additional scripts and experiments can be added as the project evolves.
+## 📁 Repository Structure
 
 ```text
 pokemon-card-authenticity/
 │
 ├── README.md
+├── LICENSE
 ├── .gitignore
-│
-├── data/
-│   └── README.md
+├── requirements.txt
 │
 ├── notebooks/
-│   └── 02_training.ipynb
+│   ├── 01_data_audit.ipynb
+│   ├── 02_split_v4.ipynb
+│   ├── 03_exif_correction.ipynb
+│   ├── 04_training_v3.ipynb
+│   ├── 05_internal_test.ipynb
+│   ├── 06_blind_test_262.ipynb
+│   ├── 07_external_test_47.ipynb
+│   └── 08_gradcam_analysis.ipynb
+│
+├── src/
+│   ├── __init__.py
+│   ├── dataset.py
+│   ├── transforms.py
+│   ├── model.py
+│   ├── train.py
+│   ├── metrics.py
+│   ├── gradcam.py
+│   └── utils.py
+│
+├── data/
+│   └── README.md          # Not included: photographs of physical cards
 │
 ├── models/
-│   └── README.md
+│   └── README.md          # Checkpoint download instructions
 │
 ├── results/
-│   ├── metrics/
-│   ├── confusion_matrix/
-│   └── gradcam/
+│   ├── internal_test/
+│   ├── blind_test_262/
+│   ├── external_test_47/
+│   ├── real_world_tests/
+│   ├── cross_domain/
+│   ├── gradcam/
+│   └── figures/
 │
 └── docs/
-    └── methodology.md
-```
+    ├── 01_dataset.md
+    ├── 02_pipeline.md
+    ├── 03_training.md
+    ├── 04_evaluation.md
+    ├── 05_domain_shift.md
+    ├── 06_interpretability.md
+    ├── 07_limitations.md
+    ├── 08_future_work.md
+    └── CHANGELOG.md
 
-The actual repository structure may evolve as the project is documented and additional experiments are added.
 
----
 
-# 🔄 Reproducibility
-
-The objective is to make the experiment reproducible.
-
-Important components include:
-
-- Fixed dataset organization
-- Card-level dataset splitting
-- Explicit training configuration
-- Saved model checkpoints
-- Evaluation methodology
-- External test dataset
-- Model interpretability analysis
-- Environment and dependency documentation
-
-The dataset itself is not currently included in the repository because it consists of photographs of physical cards collected for this research project.
-
----
-
-# 🚧 Limitations
-
-This project is an experimental computer vision system and **is not a certified authentication system**.
-
-Important limitations include:
-
-1. The dataset is relatively small compared with large-scale computer vision datasets.
-2. The diversity of counterfeit cards is limited.
-3. Holographic counterfeit examples are still limited.
-4. Photographic conditions can influence predictions.
-5. Camera-specific characteristics may introduce bias.
-6. Some cards may contain visual characteristics that correlate with authenticity.
-7. A model confidence score does not represent a probability of real-world authentication.
-8. External evaluation is still limited in size.
-9. The model has not been evaluated against every Pokémon card generation, set, language or printing variation.
-10. Physical characteristics that cannot be captured reliably in a photograph are outside the scope of the current system.
-
----
-
-# 🚀 Future Work
-
-Several improvements are planned.
-
-### Dataset expansion
-
-- Add more authentic cards.
-- Add more counterfeit cards.
-- Increase the number of unique card pairs.
-- Add more languages.
-- Increase the number of holographic cards.
-- Include additional counterfeit manufacturing characteristics.
-
-### Model improvements
-
-Potential experiments include:
-
-- ResNet50
-- EfficientNet
-- ConvNeXt
-- Vision Transformers
-- Different augmentation strategies
-- Hyperparameter optimization
-- Class-weighted training
-- Ensemble models
-
-### Robustness
-
-Future experiments could evaluate:
-
-- Different lighting conditions
-- Different backgrounds
-- Different cameras
-- Different distances
-- Rotation
-- Perspective changes
-- Cropping
-- Low-resolution photographs
-
-### Interpretability
-
-Further Grad-CAM analysis could investigate:
-
-- Which regions consistently influence predictions.
-- Whether the model relies on artwork.
-- Whether it uses borders or text.
-- Whether it detects printing characteristics.
-- Whether holographic regions influence predictions.
-- Whether the model exhibits camera-specific shortcuts.
-
----
-
-# 📌 Key Lessons
-
-This project reinforced several important machine learning principles.
-
-### 1. Dataset design matters as much as model architecture
-
-A sophisticated model cannot compensate for a poorly designed evaluation strategy.
-
-### 2. Data leakage can produce misleadingly high performance
-
-When multiple images belong to the same physical object, splitting by image can make a model appear much better than it actually is.
-
-### 3. Accuracy is not enough
-
-A model can achieve excellent test performance and still fail on unseen data.
-
-### 4. External validation is essential
-
-An independent dataset provides a more realistic estimate of generalization.
-
-### 5. Interpretability matters
-
-Grad-CAM can reveal whether a model appears to be using meaningful visual features or potentially relying on shortcuts.
-
-### 6. Failure analysis is valuable
-
-Incorrect predictions often teach more about a model than correctly classified examples.
-
----
-
-# 🧭 Project Status
-
-**Current status: Experimental / Active Development**
-
-### Completed
-
-- [x] Physical card dataset collection
-- [x] Real/fake dataset organization
-- [x] Card-level train/validation/test split
-- [x] Data leakage prevention
-- [x] ResNet18 training
-- [x] Internal test evaluation
-- [x] External dataset collection
-- [x] External evaluation
-- [x] Initial error analysis
-- [x] Grad-CAM analysis
-- [x] Bias and limitation analysis
-
-### In progress
-
-- [ ] Expand external dataset
-- [ ] Add more holographic examples
-- [ ] Improve external validation
-- [ ] Compare additional architectures
-- [ ] Document complete experimental history
-- [ ] Add visual results to repository
-- [ ] Publish reproducible training pipeline
-
----
-
-# 👤 Author
-
-**Jonathan Paredes**
-
-Computer Science / Informatics Engineer  
-Chile
-
-Areas of interest:
-
-- Data Engineering
-- Machine Learning
-- Computer Vision
-- Data Analytics
-- MLOps
-
----
-
-# 📜 Disclaimer
-
-This project is an educational and experimental machine learning project.
-
-The model's predictions should **not be considered definitive proof of card authenticity**.
-
-Professional authentication may require physical inspection of characteristics that cannot be reliably captured through photographs alone.
-
----
-
-# ⭐ Final Note
-
-The purpose of this project is not simply to build a model that achieves a high accuracy score.
-
-The broader objective is to investigate the complete machine learning problem:
-
-```text
-Can we collect meaningful data?
-        ↓
-Can we prevent leakage?
-        ↓
-Can we train a useful model?
-        ↓
-Does it generalize?
-        ↓
-Where does it fail?
-        ↓
-What is the model actually looking at?
-        ↓
-What are its limitations?
-```
-
-The goal is therefore to move from:
-
-> **"The model gets 99% accuracy."**
-
-to:
-
-> **"We understand how the model was trained, how it was evaluated, where it generalizes, where it fails, and what factors may influence its decisions."**
-
-That distinction is at the core of this project.

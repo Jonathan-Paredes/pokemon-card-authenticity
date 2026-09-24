@@ -1,0 +1,6 @@
+Test,N,Protocol,Metric,Value,Category
+Internal,558,Same camera + protocol,F1,0.978,In-domain
+Blind,262,Same camera + protocol,F1,0.984,In-domain
+External,47,"Same camera, new expansion",Recall,0.957,In-domain
+Webcam,29,Different camera,Accuracy,0.552,Out-of-domain
+Marketplace,20,Different conditions,Recall,0.15,Out-of-domain

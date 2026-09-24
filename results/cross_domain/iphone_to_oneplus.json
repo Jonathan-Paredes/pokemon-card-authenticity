@@ -1,0 +1,9 @@
+{
+  "source_domain": "Fotos_iphone",
+  "target_domain": "Fotos_oneplus",
+  "source_f1": 0.973,
+  "source_auc": 0.9972,
+  "target_f1": 0.8538,
+  "target_auc": 0.9508,
+  "drop_f1": 0.1192
+}
